@@ -62,6 +62,8 @@ class Command(BaseCommand):
                     'email': data['email'],
                     'role': data['role'],
                     'is_active': True,
+                    'is_staff': data['role'] == 'admin',
+                    'is_superuser': data['role'] == 'admin',
                 }
             )
             if created:
