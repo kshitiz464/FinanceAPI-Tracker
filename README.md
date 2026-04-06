@@ -2,8 +2,7 @@
 
 > A secure, production-quality Django REST API for finance data processing with role-based access control, dashboard analytics, and comprehensive API documentation.
 
-**Built for:** Zorvyn Backend Developer Intern Assignment  
-**Author:** Kshitiz  
+**Author:** kshitiz464
 
 ---
 
