@@ -89,7 +89,20 @@ Zorvyn/
 
 ## ⚡ Quick Start
 
-### 1. Clone & Setup
+### Option A: Windows One-Click Setup
+If you are on Windows, simply double-click the included batch file to automate everything from virtual environment creation to starting the server:
+
+```bash
+# Just run this file
+setup.bat
+```
+*(This will setup Python, install requirements, migrate the database, seed demo data, and start the local server on port 8000 automatically).*
+
+---
+
+### Option B: Manual Setup
+
+#### 1. Clone & Setup
 
 ```bash
 git clone <repo-url>
