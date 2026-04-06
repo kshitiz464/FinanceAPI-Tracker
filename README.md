@@ -292,4 +292,4 @@ python manage.py test api
 
 ## 📄 License
 
-This project was built as an assignment submission for Zorvyn.
+Currently open to view and use
