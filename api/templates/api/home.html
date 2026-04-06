@@ -1,0 +1,110 @@
+{% extends "api/base.html" %}
+{% block title %}Finance Dashboard — Login{% endblock %}
+
+{% block content %}
+<div class="auth-hero">
+    <h1>Finance Dashboard</h1>
+    <p>A secure finance data backend with role-based access control,<br>real-time analytics, and comprehensive API documentation.</p>
+</div>
+
+<div class="auth-outer">
+    <div class="auth-card">
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('login')"><i class="fas fa-sign-in-alt"></i> Login</button>
+            <button class="tab" onclick="switchTab('register')"><i class="fas fa-user-plus"></i> Register</button>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-err"><i class="fas fa-exclamation-circle"></i> {{ error }}</div>
+        {% endif %}
+        {% if success %}
+        <div class="alert alert-ok"><i class="fas fa-check-circle"></i> {{ success }}</div>
+        {% endif %}
+
+        <!-- Login -->
+        <form id="loginForm" class="auth-form active" method="post" action="/login/">
+            {% csrf_token %}
+            <div class="fg">
+                <label>Username</label>
+                <input type="text" name="username" class="fc" placeholder="Enter username" required>
+            </div>
+            <div class="fg">
+                <label>Password</label>
+                <input type="password" name="password" class="fc" placeholder="Enter password" required>
+            </div>
+            <button type="submit" class="bprimary"><i class="fas fa-sign-in-alt"></i> Sign In</button>
+        </form>
+
+        <!-- Register -->
+        <form id="registerForm" class="auth-form" method="post" action="/register-page/">
+            {% csrf_token %}
+            <div class="fg">
+                <label>Username</label>
+                <input type="text" name="username" class="fc" placeholder="Choose a username" required minlength="3">
+            </div>
+            <div class="fg">
+                <label>Email</label>
+                <input type="email" name="email" class="fc" placeholder="your@email.com" required>
+            </div>
+            <div class="fg">
+                <label>Password</label>
+                <input type="password" name="password" class="fc" placeholder="Min. 8 characters" required minlength="8">
+            </div>
+            <div class="fg">
+                <label>Role</label>
+                <select name="role" class="fc">
+                    <option value="viewer">Viewer — View transactions only</option>
+                    <option value="analyst">Analyst — View records &amp; insights</option>
+                    <option value="admin">Admin — Full management access</option>
+                </select>
+            </div>
+            <button type="submit" class="bprimary"><i class="fas fa-user-plus"></i> Create Account</button>
+        </form>
+    </div>
+
+    <!-- Demo credentials -->
+    <div style="margin-top:18px;text-align:center;">
+        <p style="font-size:12px;color:var(--text3);margin-bottom:10px"><i class="fas fa-info-circle"></i> Demo accounts — click to autofill:</p>
+        <div class="demo-chips">
+            <button class="demo-chip" onclick="fillDemo('admin_user','Admin@123')">
+                <span class="role-badge rb-admin">Admin</span>&nbsp; admin_user
+            </button>
+            <button class="demo-chip" onclick="fillDemo('analyst_user','Analyst@123')">
+                <span class="role-badge rb-analyst">Analyst</span>&nbsp; analyst_user
+            </button>
+            <button class="demo-chip" onclick="fillDemo('viewer_user','Viewer@123')">
+                <span class="role-badge rb-viewer">Viewer</span>&nbsp; viewer_user
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- External links -->
+<div class="ext-links" style="margin-top:40px;">
+    <a href="/api/docs/" class="ext-link" target="_blank"><i class="fas fa-book-open"></i> Swagger UI</a>
+    <a href="/api/redoc/" class="ext-link" target="_blank"><i class="fas fa-file-code"></i> ReDoc</a>
+    <a href="/api/schema/" class="ext-link" target="_blank"><i class="fas fa-project-diagram"></i> OpenAPI Schema</a>
+    <a href="/admin/" class="ext-link" target="_blank"><i class="fas fa-shield-alt"></i> Admin Panel</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchTab(t) {
+    document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+    document.querySelectorAll('.auth-form').forEach(e => e.classList.remove('active'));
+    if(t === 'login'){
+        document.querySelectorAll('.tab')[0].classList.add('active');
+        document.getElementById('loginForm').classList.add('active');
+    } else {
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.getElementById('registerForm').classList.add('active');
+    }
+}
+function fillDemo(u, p) {
+    switchTab('login');
+    document.querySelector('#loginForm [name=username]').value = u;
+    document.querySelector('#loginForm [name=password]').value = p;
+}
+</script>
+{% endblock %}

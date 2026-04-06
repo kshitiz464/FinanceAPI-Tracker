@@ -1,0 +1,504 @@
+{% extends "api/base.html" %}
+{% block title %}Dashboard — Finance Dashboard{% endblock %}
+
+{% block content %}
+<!-- ═══ PAGE HEADER ═══ -->
+<div class="page-header">
+    <h1>Welcome back, {{ user.username }}
+        <span class="role-badge rb-{{ user.role }}" style="font-size:13px;vertical-align:middle">{{ user.role }}</span>
+    </h1>
+    <p>
+        {% if user.role == 'admin' %}Full access &mdash; manage users, transactions, and all analytics.
+        {% elif user.role == 'analyst' %}View transactions and access detailed financial analytics & insights.
+        {% else %}View all transaction records and navigate to documentation.{% endif %}
+    </p>
+</div>
+
+<!-- ═══ QUICK LINKS ═══ -->
+<div class="qlinks">
+    <a href="/api/docs/" class="qlink" target="_blank">
+        <div class="qlink-icon"><i class="fas fa-book-open"></i></div>
+        <div><div class="qlink-text">Swagger UI</div><div class="qlink-sub">Interactive API testing</div></div>
+    </a>
+    <a href="/api/redoc/" class="qlink" target="_blank">
+        <div class="qlink-icon"><i class="fas fa-file-code"></i></div>
+        <div><div class="qlink-text">ReDoc</div><div class="qlink-sub">API reference docs</div></div>
+    </a>
+    {% if user.role == 'admin' %}
+    <a href="/admin/" class="qlink" target="_blank">
+        <div class="qlink-icon"><i class="fas fa-shield-alt"></i></div>
+        <div><div class="qlink-text">Admin Panel</div><div class="qlink-sub">Manage everything</div></div>
+    </a>
+    {% endif %}
+    <a href="/api/schema/" class="qlink" target="_blank">
+        <div class="qlink-icon"><i class="fas fa-project-diagram"></i></div>
+        <div><div class="qlink-text">OpenAPI Schema</div><div class="qlink-sub">Download JSON schema</div></div>
+    </a>
+</div>
+
+<!-- ═══ KPI CARDS (analyst + admin only) ═══ -->
+{% if user.role == 'analyst' or user.role == 'admin' %}
+<div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-card kpi-income">
+        <i class="fas fa-arrow-up kpi-icon" style="color:var(--green)"></i>
+        <div class="kpi-label">Total Income</div>
+        <div class="kpi-value" id="kTotalIncome">—</div>
+        <div class="kpi-sub" id="kIncomeCount">— transactions</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+        <i class="fas fa-arrow-down kpi-icon" style="color:var(--red)"></i>
+        <div class="kpi-label">Total Expenses</div>
+        <div class="kpi-value" id="kTotalExpense">—</div>
+        <div class="kpi-sub" id="kExpenseCount">— transactions</div>
+    </div>
+    <div class="kpi-card kpi-balance">
+        <i class="fas fa-wallet kpi-icon" style="color:var(--accent2)"></i>
+        <div class="kpi-label">Net Balance</div>
+        <div class="kpi-value" id="kNetBalance">—</div>
+        <div class="kpi-sub" id="kBalanceSub">income − expenses</div>
+    </div>
+    <div class="kpi-card kpi-rate">
+        <i class="fas fa-piggy-bank kpi-icon" style="color:var(--amber)"></i>
+        <div class="kpi-label">Savings Rate</div>
+        <div class="kpi-value" id="kSavingsRate">—</div>
+        <div class="kpi-sub">% of income saved</div>
+    </div>
+    <div class="kpi-card kpi-count">
+        <i class="fas fa-receipt kpi-icon" style="color:var(--blue)"></i>
+        <div class="kpi-label">Transactions</div>
+        <div class="kpi-value" id="kCount">—</div>
+        <div class="kpi-sub" id="kCountSub">— income / — expense</div>
+    </div>
+    <div class="kpi-card kpi-avg">
+        <i class="fas fa-chart-bar kpi-icon" style="color:var(--purple)"></i>
+        <div class="kpi-label">Burn Rate</div>
+        <div class="kpi-value" id="kBurnRate">—</div>
+        <div class="kpi-sub">avg expense / month</div>
+    </div>
+</div>
+
+<!-- ═══ CHARTS ROW ═══ -->
+<div class="charts-row" style="margin-bottom:24px;">
+    <!-- Income vs Expense Trend -->
+    <div class="card">
+        <div class="card-title"><i class="fas fa-chart-line"></i>Monthly Cash Flow</div>
+        <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
+    </div>
+    <!-- Income/Expense Doughnut -->
+    <div class="card">
+        <div class="card-title"><i class="fas fa-chart-pie"></i>Income vs Expenses</div>
+        <div class="chart-wrap" style="height:200px;"><canvas id="chartDonut"></canvas></div>
+    </div>
+</div>
+
+<!-- ═══ CATEGORY BREAKDOWN ═══ -->
+<div class="charts-row" style="margin-bottom:24px;">
+    <div class="card">
+        <div class="card-title"><i class="fas fa-layer-group"></i>Top Expense Categories</div>
+        <div id="expCats"><div style="text-align:center;padding:20px;color:var(--text3)"><div class="spin"></div></div></div>
+    </div>
+    <div class="card">
+        <div class="card-title"><i class="fas fa-coins"></i>Top Income Sources</div>
+        <div id="incCats"><div style="text-align:center;padding:20px;color:var(--text3)"><div class="spin"></div></div></div>
+    </div>
+</div>
+
+<!-- ═══ FINANCIAL RATIOS ═══ -->
+<div class="card" style="margin-bottom:24px;">
+    <div class="card-title"><i class="fas fa-balance-scale"></i>Financial Health Ratios</div>
+    <div id="ratios" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+        <div>
+            <div class="ratio-row">
+                <div class="ratio-label">Savings Rate</div>
+                <div class="ratio-track"><div class="ratio-fill" id="ratioSavings" style="width:0%;background:linear-gradient(90deg,#10b981,#34d399)"></div></div>
+                <div class="ratio-pct tc-green" id="rSavingsPct">–</div>
+            </div>
+            <div class="ratio-row">
+                <div class="ratio-label">Expense Ratio</div>
+                <div class="ratio-track"><div class="ratio-fill" id="ratioExpense" style="width:0%;background:linear-gradient(90deg,#ef4444,#f87171)"></div></div>
+                <div class="ratio-pct tc-red" id="rExpensePct">–</div>
+            </div>
+        </div>
+        <div>
+            <div class="ratio-row">
+                <div class="ratio-label">Income Growth</div>
+                <div class="ratio-track"><div class="ratio-fill" id="ratioGrowth" style="width:0%;background:linear-gradient(90deg,#6366f1,#a855f7)"></div></div>
+                <div class="ratio-pct tc-blue" id="rGrowthPct">–</div>
+            </div>
+            <div class="ratio-row">
+                <div class="ratio-label">Avg Income / Txn</div>
+                <div class="ratio-track"><div class="ratio-fill" id="ratioAvg" style="width:60%;background:linear-gradient(90deg,#f59e0b,#fb923c)"></div></div>
+                <div class="ratio-pct tc-amber" id="rAvgPct">–</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ═══ TRANSACTION LEDGER (all roles) ═══ -->
+<div class="card" style="margin-bottom:24px;">
+    <div class="card-header-row">
+        <div class="sec-title"><i class="fas fa-file-invoice-dollar"></i>Transaction Ledger</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="txSearch" class="fc" placeholder="Search…" style="width:160px;padding:6px 10px;font-size:12px;">
+            <select id="txTypeFilter" class="fc" style="width:110px;padding:6px 8px;font-size:12px;">
+                <option value="">All types</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+            </select>
+            {% if user.role == 'admin' %}
+            <a href="/admin/api/transaction/add/" class="btn btn-sm" style="background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;" target="_blank">
+                <i class="fas fa-plus"></i>Add
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="ledger-wrap">
+        <table id="ledgerTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Description / Category</th>
+                    <th>Type</th>
+                    <th style="text-align:right">Debit (Expense)</th>
+                    <th style="text-align:right">Credit (Income)</th>
+                    <th style="text-align:right">Running Balance</th>
+                    <th>By</th>
+                </tr>
+            </thead>
+            <tbody id="ledgerBody">
+                <tr class="loading-row"><td colspan="8"><div class="spin"></div> Loading ledger…</td></tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" style="color:var(--text2);font-size:12px">
+                        Showing <span id="txCount">—</span> records
+                    </td>
+                    <td id="ftDebit"  style="text-align:right;color:var(--red)"  >—</td>
+                    <td id="ftCredit" style="text-align:right;color:var(--green)">—</td>
+                    <td id="ftBal"    style="text-align:right;color:var(--accent2)">—</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+{% if user.role == 'admin' %}
+<!-- ═══ USER MANAGEMENT (admin only) ═══ -->
+<div class="card" style="margin-bottom:24px;">
+    <div class="card-header-row">
+        <div class="sec-title"><i class="fas fa-users"></i>User Management</div>
+        <a href="/admin/api/user/" class="btn btn-outline btn-sm" target="_blank"><i class="fas fa-external-link-alt"></i>Admin Panel</a>
+    </div>
+    <div class="ledger-wrap">
+        <table>
+            <thead>
+                <tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th></tr>
+            </thead>
+            <tbody id="usersBody">
+                <tr class="loading-row"><td colspan="5"><div class="spin"></div></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- ═══ API ENDPOINT REFERENCE ═══ -->
+<div class="card">
+    <div class="card-header-row">
+        <div class="sec-title"><i class="fas fa-code"></i>API Endpoint Reference</div>
+        <a href="/api/docs/" class="btn btn-outline btn-sm" target="_blank"><i class="fas fa-external-link-alt"></i>Open Swagger</a>
+    </div>
+    <div class="ledger-wrap">
+        <table>
+            <thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><span class="badge b-income">POST</span></td><td>/api/auth/register/</td><td>Public</td><td>Register new user</td></tr>
+                <tr><td><span class="badge b-income">POST</span></td><td>/api/auth/token/</td><td>Public</td><td>Login — returns JWT access + refresh</td></tr>
+                <tr><td><span class="badge b-income">POST</span></td><td>/api/auth/token/refresh/</td><td>Public</td><td>Refresh access token</td></tr>
+                <tr><td><span class="badge" style="background:var(--blue-bg);color:var(--blue)">GET</span></td><td>/api/transactions/</td><td>All roles</td><td>List with ?type &nbsp;?category &nbsp;?search &nbsp;?date_from/to</td></tr>
+                <tr><td><span class="badge b-income">POST</span></td><td>/api/transactions/</td><td style="color:var(--red)">Admin</td><td>Create transaction</td></tr>
+                <tr><td><span class="badge" style="background:var(--blue-bg);color:var(--blue)">GET</span></td><td>/api/dashboard/summary/</td><td style="color:var(--amber)">Analyst+</td><td>Income, expenses, net balance, counts</td></tr>
+                <tr><td><span class="badge" style="background:var(--blue-bg);color:var(--blue)">GET</span></td><td>/api/dashboard/categories/</td><td style="color:var(--amber)">Analyst+</td><td>Breakdown by category &amp; type</td></tr>
+                <tr><td><span class="badge" style="background:var(--blue-bg);color:var(--blue)">GET</span></td><td>/api/dashboard/trends/</td><td style="color:var(--amber)">Analyst+</td><td>Monthly cash flow trends</td></tr>
+                <tr><td><span class="badge" style="background:var(--blue-bg);color:var(--blue)">GET</span></td><td>/api/dashboard/recent/?limit=N</td><td style="color:var(--amber)">Analyst+</td><td>N most recent transactions</td></tr>
+                <tr><td><span class="badge" style="background:var(--blue-bg);color:var(--blue)">GET</span></td><td>/api/dashboard/top-categories/</td><td style="color:var(--amber)">Analyst+</td><td>Top 5 income &amp; expense categories</td></tr>
+                <tr><td><span class="badge" style="background:var(--blue-bg);color:var(--blue)">GET</span></td><td>/api/users/</td><td style="color:var(--red)">Admin</td><td>List all users</td></tr>
+                <tr><td><span class="badge" style="background:var(--amber-bg);color:var(--amber)">PATCH</span></td><td>/api/users/{id}/</td><td style="color:var(--red)">Admin</td><td>Update user role / active status</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+const TOKEN = '{{ access_token }}';
+const ROLE  = '{{ user.role }}';
+const H = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
+
+// ── Formatters ─────────────────────────────────────────────────────
+const INR = n => new Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', maximumFractionDigits:0}).format(n);
+const INR2 = n => new Intl.NumberFormat('en-IN', {style:'currency', currency:'INR', minimumFractionDigits:2, maximumFractionDigits:2}).format(n);
+const DATE = d => new Date(d).toLocaleDateString('en-IN', {year:'numeric', month:'short', day:'numeric'});
+const MONTH = d => new Date(d).toLocaleDateString('en-IN', {year:'numeric', month:'short'});
+
+// ── State ───────────────────────────────────────────────────────────
+let allTx = [];
+let chartTrend, chartDonut;
+
+// ════════════════════════════════════════════════════
+// LEDGER — all roles can see transactions
+// ════════════════════════════════════════════════════
+async function loadLedger() {
+    try {
+        const res = await fetch('/api/transactions/?page_size=100', {headers:H});
+        const data = await res.json();
+        allTx = (data.results || data).sort((a,b) => new Date(a.date) - new Date(b.date));
+        renderLedger(allTx);
+    } catch(e) {
+        document.getElementById('ledgerBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red);padding:20px">Failed to load transactions.</td></tr>';
+    }
+}
+
+function renderLedger(rows) {
+    const tbody = document.getElementById('ledgerBody');
+    if(!rows.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">No transactions found.</td></tr>'; return; }
+
+    let runBal = 0, totalDebit = 0, totalCredit = 0;
+
+    // Build rows in chronological order with running balance
+    const html = rows.map((t, i) => {
+        const isIncome = t.type === 'income';
+        if(isIncome) runBal += t.amount; else runBal -= t.amount;
+        if(isIncome) totalCredit += t.amount; else totalDebit += t.amount;
+        const balColor = runBal >= 0 ? 'var(--green)' : 'var(--red)';
+        const by = t.created_by ? (t.created_by.username || t['created_by__username'] || '—') : '—';
+        return `<tr>
+            <td style="color:var(--text3);font-size:11px">${t.id}</td>
+            <td style="color:var(--text2);white-space:nowrap">${DATE(t.date)}</td>
+            <td>
+                <div style="font-weight:500">${t.description || '—'}</div>
+                <div><span class="badge b-cat">${t.category}</span></div>
+            </td>
+            <td><span class="badge ${isIncome?'b-income':'b-expense'}">${t.type}</span></td>
+            <td style="text-align:right" class="debit-col mono">${isIncome ? '—' : INR2(t.amount)}</td>
+            <td style="text-align:right" class="credit-col mono">${isIncome ? INR2(t.amount) : '—'}</td>
+            <td style="text-align:right;font-weight:700;color:${balColor}" class="mono">${INR2(runBal)}</td>
+            <td style="color:var(--text3);font-size:11px">${by}</td>
+        </tr>`;
+    }).join('');
+
+    tbody.innerHTML = html;
+    document.getElementById('txCount').textContent = rows.length;
+    document.getElementById('ftDebit').textContent  = INR2(totalDebit);
+    document.getElementById('ftCredit').textContent = INR2(totalCredit);
+    document.getElementById('ftBal').textContent    = INR2(totalCredit - totalDebit);
+}
+
+// ── Ledger filters ──────────────────────────────────────────────────
+function filterLedger() {
+    const search = document.getElementById('txSearch').value.toLowerCase();
+    const type   = document.getElementById('txTypeFilter').value;
+    const filtered = allTx.filter(t => {
+        const matchType = !type || t.type === type;
+        const matchSearch = !search || (t.description||'').toLowerCase().includes(search) || t.category.toLowerCase().includes(search);
+        return matchType && matchSearch;
+    });
+    renderLedger(filtered);
+}
+document.getElementById('txSearch')?.addEventListener('input', filterLedger);
+document.getElementById('txTypeFilter')?.addEventListener('change', filterLedger);
+
+
+// ════════════════════════════════════════════════════
+// ANALYTICS — analyst + admin only
+// ════════════════════════════════════════════════════
+{% if user.role == 'analyst' or user.role == 'admin' %}
+async function loadAnalytics() {
+    const [sumRes, topRes, trendRes] = await Promise.all([
+        fetch('/api/dashboard/summary/', {headers:H}),
+        fetch('/api/dashboard/top-categories/?limit=7', {headers:H}),
+        fetch('/api/dashboard/trends/', {headers:H}),
+    ]);
+    const sum   = await sumRes.json();
+    const top   = await topRes.json();
+    const trend = await trendRes.json();
+
+    renderKPIs(sum);
+    renderFinancialRatios(sum, trend);
+    renderTopCats(top);
+    renderCharts(trend, sum);
+}
+
+function renderKPIs(s) {
+    document.getElementById('kTotalIncome').textContent  = INR(s.total_income);
+    document.getElementById('kTotalExpense').textContent = INR(s.total_expenses);
+    document.getElementById('kNetBalance').textContent   = INR(s.net_balance);
+    document.getElementById('kCount').textContent        = s.total_transactions;
+    document.getElementById('kIncomeCount').textContent  = `${s.income_count} transactions`;
+    document.getElementById('kExpenseCount').textContent = `${s.expense_count} transactions`;
+    document.getElementById('kCountSub').textContent     = `${s.income_count} income / ${s.expense_count} expense`;
+
+    const savingsRate = s.total_income > 0 ? ((s.net_balance / s.total_income) * 100).toFixed(1) : 0;
+    document.getElementById('kSavingsRate').textContent  = `${savingsRate}%`;
+    document.getElementById('kBalanceSub').textContent   = s.net_balance >= 0 ? 'Positive cashflow' : 'Deficit — expenses exceed income';
+    if(s.net_balance < 0) document.getElementById('kNetBalance').style.color = 'var(--red)';
+}
+
+function renderFinancialRatios(s, trends) {
+    const savPct = s.total_income > 0 ? Math.max(0, (s.net_balance / s.total_income) * 100) : 0;
+    const expPct = s.total_income > 0 ? Math.min(100, (s.total_expenses / s.total_income) * 100) : 0;
+
+    // Burn rate: avg monthly expense
+    const months = {};
+    trends.forEach(t => {
+        const m = t.month.substring(0,7);
+        if(!months[m]) months[m] = 0;
+        if(t.type === 'expense') months[m] += t.total;
+    });
+    const mVals = Object.values(months);
+    const burnRate = mVals.length ? mVals.reduce((a,b) => a+b, 0) / mVals.length : 0;
+    document.getElementById('kBurnRate').textContent = INR(burnRate);
+
+    // Ratios
+    document.getElementById('ratioSavings').style.width = Math.min(savPct, 100) + '%';
+    document.getElementById('rSavingsPct').textContent  = savPct.toFixed(1) + '%';
+    document.getElementById('ratioExpense').style.width = Math.min(expPct, 100) + '%';
+    document.getElementById('rExpensePct').textContent  = expPct.toFixed(1) + '%';
+
+    // Income growth vs expense growth (last 2 months)
+    const incomeByMonth = {};
+    trends.forEach(t => { if(t.type==='income'){ const m=t.month.substring(0,7); incomeByMonth[m]=(incomeByMonth[m]||0)+t.total; }});
+    const incMonths = Object.values(incomeByMonth);
+    let growth = 0;
+    if(incMonths.length >= 2) growth = ((incMonths[incMonths.length-1] - incMonths[incMonths.length-2]) / incMonths[incMonths.length-2] * 100);
+    const growthPct = Math.max(0, Math.min(100, Math.abs(growth)));
+    document.getElementById('ratioGrowth').style.width = growthPct + '%';
+    document.getElementById('rGrowthPct').textContent  = (growth >= 0 ? '+' : '') + growth.toFixed(1) + '%';
+    document.getElementById('rGrowthPct').style.color  = growth >= 0 ? 'var(--green)' : 'var(--red)';
+
+    const avgInc = s.income_count > 0 ? s.total_income / s.income_count : 0;
+    document.getElementById('rAvgPct').textContent = INR(avgInc);
+    document.getElementById('ratioAvg').style.width = '65%';
+}
+
+function renderTopCats(top) {
+    renderBars('expCats', top.top_expense_categories || [], 'exp');
+    renderBars('incCats', top.top_income_categories  || [], 'inc');
+}
+
+function renderBars(id, data, cls) {
+    const el = document.getElementById(id);
+    if(!data.length){ el.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px">No data</div>'; return; }
+    const max = Math.max(...data.map(d => d.total));
+    el.innerHTML = data.map(d => `
+        <div class="bar-row">
+            <div class="bar-label" title="${d.category}">${d.category}</div>
+            <div class="bar-track"><div class="bar-fill ${cls}" style="width:${(d.total/max*100).toFixed(1)}%"></div></div>
+            <div class="bar-amount" style="color:${cls==='inc'?'var(--green)':'var(--red)'}">${INR(d.total)}</div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-left:142px;margin-top:-4px;margin-bottom:6px">${d.count} transaction${d.count!==1?'s':''} &middot; avg ${INR(d.avg_amount||d.total/d.count)}</div>
+    `).join('');
+}
+
+function renderCharts(trends, sum) {
+    // Build monthly data map
+    const byMonth = {};
+    trends.forEach(t => {
+        const m = MONTH(t.month);
+        if(!byMonth[m]) byMonth[m] = {income:0, expense:0};
+        if(t.type==='income') byMonth[m].income += t.total;
+        else byMonth[m].expense += t.total;
+    });
+    const labels = Object.keys(byMonth);
+    const incVals = labels.map(m => byMonth[m].income);
+    const expVals = labels.map(m => byMonth[m].expense);
+    const netVals = labels.map(m => byMonth[m].income - byMonth[m].expense);
+
+    const gridColor = 'rgba(148,163,184,.1)';
+    const tickColor = getComputedStyle(document.documentElement).getPropertyValue('--text3').trim() || '#64748b';
+
+    // Line chart — Monthly cash flow
+    const ctxL = document.getElementById('chartTrend').getContext('2d');
+    if(chartTrend) chartTrend.destroy();
+    chartTrend = new Chart(ctxL, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label:'Income',  data:incVals, backgroundColor:'rgba(16,185,129,.7)', borderRadius:4 },
+                { label:'Expense', data:expVals, backgroundColor:'rgba(239,68,68,.7)',  borderRadius:4 },
+                { label:'Net',     data:netVals, type:'line',
+                  borderColor:'#818cf8', borderWidth:2, pointBackgroundColor:'#818cf8',
+                  tension:.4, fill:false },
+            ]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ labels:{ color:'#94a3b8', font:{size:11} } } },
+            scales:{
+                x:{ grid:{color:gridColor}, ticks:{color:'#94a3b8', font:{size:10}} },
+                y:{ grid:{color:gridColor}, ticks:{color:'#94a3b8', font:{size:10}, callback: v => INR(v) } }
+            }
+        }
+    });
+
+    // Donut chart
+    const ctxD = document.getElementById('chartDonut').getContext('2d');
+    if(chartDonut) chartDonut.destroy();
+    chartDonut = new Chart(ctxD, {
+        type:'doughnut',
+        data:{
+            labels:['Total Income','Total Expenses'],
+            datasets:[{ data:[sum.total_income, sum.total_expenses],
+                backgroundColor:['rgba(16,185,129,.8)','rgba(239,68,68,.8)'],
+                borderColor:['#10b981','#ef4444'], borderWidth:1,
+                hoverOffset:6 }]
+        },
+        options:{
+            responsive:true, maintainAspectRatio:false,
+            cutout:'65%',
+            plugins:{
+                legend:{ position:'bottom', labels:{ color:'#94a3b8', font:{size:11}, padding:16 } },
+                tooltip:{ callbacks:{ label: ctx => ` ${INR(ctx.parsed)}` } }
+            }
+        }
+    });
+}
+{% endif %}
+
+{% if user.role == 'admin' %}
+async function loadUsers() {
+    const res = await fetch('/api/users/', {headers:H});
+    const data = await res.json();
+    const users = data.results || data;
+    document.getElementById('usersBody').innerHTML = users.map(u => `
+        <tr>
+            <td style="font-weight:600">${u.username}</td>
+            <td style="color:var(--text2)">${u.email||'—'}</td>
+            <td><span class="role-badge rb-${u.role}">${u.role}</span></td>
+            <td style="color:${u.is_active?'var(--green)':'var(--red)'}">
+                <i class="fas fa-circle" style="font-size:7px;margin-right:4px"></i>${u.is_active?'Active':'Inactive'}
+            </td>
+            <td style="color:var(--text3)">${DATE(u.date_joined)}</td>
+        </tr>
+    `).join('');
+}
+{% endif %}
+
+// ── INIT ────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    loadLedger();
+    {% if user.role == 'analyst' or user.role == 'admin' %}
+    loadAnalytics();
+    {% endif %}
+    {% if user.role == 'admin' %}
+    loadUsers();
+    {% endif %}
+});
+</script>
+{% endblock %}
